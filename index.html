@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload to Google Drive</title>
+    <title>Upload Image to Google Drive</title>
 </head>
 <body>
     <h1>Upload Image to Google Drive</h1>
@@ -12,8 +12,8 @@
     <button id="authButton">Authorize</button>
 
     <script>
-        const CLIENT_ID = '182391272459-t6b4m3cu5n0t17fjd1viglrbgnfsblpb.apps.googleusercontent.com';
-        const API_KEY = 'AIzaSyDmGNqiyMuUwXtwk_WJGoRW8wj6DxnJrK0';
+        const CLIENT_ID = 'YOUR_CLIENT_ID';
+        const API_KEY = 'YOUR_API_KEY';
         const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
         async function loadAuthClient() {
@@ -82,6 +82,14 @@
                         fileData +
                         closeDelimiter;
 
+                    // Ensure the user is authenticated
+                    const authInstance = gapi.auth2.getAuthInstance();
+                    const isSignedIn = authInstance.isSignedIn.get();
+                    if (!isSignedIn) {
+                        console.warn('User is not authenticated. Please sign in first.');
+                        return;
+                    }
+
                     const response = await gapi.client.request({
                         path: 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
                         method: 'POST',
@@ -91,7 +99,11 @@
                         body: multipartRequestBody,
                     });
 
-                    alert('File uploaded successfully: ' + response.result.id);
+                    if (response.status === 401) {
+                        console.error('Unauthorized. Please check your credentials and authentication status.');
+                    } else {
+                        alert('File uploaded successfully: ' + response.result.id);
+                    }
                 };
                 reader.readAsBinaryString(file);
             } catch (error) {

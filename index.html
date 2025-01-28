@@ -9,13 +9,14 @@
     <h1>Upload Image to Google Drive</h1>
     <input type="file" id="fileInput" accept="image/*">
     <button id="uploadButton">Upload</button>
+    <button id="authButton" style="display:none;">Authorize</button>
 
     <script>
         const CLIENT_ID = '182391272459-t6b4m3cu5n0t17fjd1viglrbgnfsblpb.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyDmGNqiyMuUwXtwk_WJGoRW8wj6DxnJrK0';
         const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
-        function loadAuthClient() {
+        async function loadAuthClient() {
             return new Promise((resolve, reject) => {
                 gapi.load('client:auth2', async () => {
                     try {
@@ -24,8 +25,17 @@
                             clientId: CLIENT_ID,
                             scope: SCOPES,
                         });
+
+                        const authInstance = gapi.auth2.getAuthInstance();
+                        const isSignedIn = authInstance.isSignedIn.get();
+
+                        // Show appropriate button based on auth status
+                        document.getElementById('authButton').style.display = isSignedIn ? 'none' : 'block';
+                        document.getElementById('uploadButton').disabled = !isSignedIn;
+
                         resolve();
                     } catch (error) {
+                        console.error('Error initializing GAPI client:', error);
                         reject(error);
                     }
                 });
@@ -34,9 +44,12 @@
 
         async function authenticate() {
             try {
-                await gapi.auth2.getAuthInstance().signIn();
+                const authInstance = gapi.auth2.getAuthInstance();
+                await authInstance.signIn();
+                document.getElementById('authButton').style.display = 'none';
+                document.getElementById('uploadButton').disabled = false;
             } catch (error) {
-                console.error('Authentication failed', error);
+                console.error('Authentication failed:', error);
             }
         }
 
@@ -79,7 +92,7 @@
                 };
                 reader.readAsBinaryString(file);
             } catch (error) {
-                console.error('File upload failed', error);
+                console.error('File upload failed:', error);
             }
         }
 
@@ -91,12 +104,13 @@
             }
             const file = fileInput.files[0];
             try {
-                await authenticate();
                 await uploadFile(file);
             } catch (error) {
                 console.error('Error:', error);
             }
         });
+
+        document.getElementById('authButton').addEventListener('click', authenticate);
 
         // Load the Google API script
         const script = document.createElement('script');

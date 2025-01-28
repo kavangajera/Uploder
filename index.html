@@ -8,8 +8,8 @@
 <body>
     <h1>Upload Image to Google Drive</h1>
     <input type="file" id="fileInput" accept="image/*">
-    <button id="uploadButton">Upload</button>
-    <button id="authButton" style="display:none;">Authorize</button>
+    <button id="uploadButton" disabled>Upload</button>
+    <button id="authButton">Authorize</button>
 
     <script>
         const CLIENT_ID = '182391272459-t6b4m3cu5n0t17fjd1viglrbgnfsblpb.apps.googleusercontent.com';
@@ -29,7 +29,6 @@
                         const authInstance = gapi.auth2.getAuthInstance();
                         const isSignedIn = authInstance.isSignedIn.get();
 
-                        // Show appropriate button based on auth status
                         document.getElementById('authButton').style.display = isSignedIn ? 'none' : 'block';
                         document.getElementById('uploadButton').disabled = !isSignedIn;
 
@@ -49,7 +48,11 @@
                 document.getElementById('authButton').style.display = 'none';
                 document.getElementById('uploadButton').disabled = false;
             } catch (error) {
-                console.error('Authentication failed:', error);
+                if (error.error === 'popup_closed_by_user') {
+                    console.warn('Authentication popup closed by user. Please try again.');
+                } else {
+                    console.error('Authentication failed:', error);
+                }
             }
         }
 

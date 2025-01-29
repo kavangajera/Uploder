@@ -1,137 +1,183 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Image to Google Drive</title>
-</head>
-<body>
-    <h1>Upload Image to Google Drive</h1>
-    <input type="file" id="fileInput" accept="image/*">
-    <button id="uploadButton" disabled>Upload</button>
-    <button id="authButton">Authorize</button>
+<html>
+  <head>
+    <title>Drive API Quickstart</title>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <p>Drive API Quickstart</p>
 
-    <script>
-        const CLIENT_ID = 'YOUR_CLIENT_ID';
-        const API_KEY = 'YOUR_API_KEY';
-        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    <!-- Single file input and upload button -->
+    <div style="margin-top: 20px;">
+      <input type="file" id="fileInput" accept=".jpg,.jpeg" style="display: block; margin-bottom: 10px;">
+      <button id="upload_button" onclick="handleUploadClick()">Upload</button>
+      <button id="signout_button" onclick="handleSignoutClick()" style="visibility: hidden;">Sign Out</button>
+    </div>
 
-        async function loadAuthClient() {
-            return new Promise((resolve, reject) => {
-                gapi.load('client:auth2', async () => {
-                    try {
-                        await gapi.client.init({
-                            apiKey: API_KEY,
-                            clientId: CLIENT_ID,
-                            scope: SCOPES,
-                        });
+    <pre id="content" style="white-space: pre-wrap;"></pre>
 
-                        const authInstance = gapi.auth2.getAuthInstance();
-                        const isSignedIn = authInstance.isSignedIn.get();
+    <script type="text/javascript">
+      const CLIENT_ID = '182391272459-t6b4m3cu5n0t17fjd1viglrbgnfsblpb.apps.googleusercontent.com';
+      const API_KEY = 'AIzaSyDmGNqiyMuUwXtwk_WJGoRW8wj6DxnJrK0';
+      const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+      const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
-                        document.getElementById('authButton').style.display = isSignedIn ? 'none' : 'block';
-                        document.getElementById('uploadButton').disabled = !isSignedIn;
+      let tokenClient;
+      let gapiInited = false;
+      let gisInited = false;
 
-                        resolve();
-                    } catch (error) {
-                        console.error('Error initializing GAPI client:', error);
-                        reject(error);
-                    }
-                });
-            });
+      // Add file input change listener
+      document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const uploadButton = document.getElementById('upload_button');
+        
+        if (file && (file.type === 'image/jpeg' || file.type === 'image/jpg')) {
+          uploadButton.removeAttribute('disabled');
+        } else {
+          uploadButton.setAttribute('disabled', 'true');
+          document.getElementById('content').innerText = 'Please select a JPEG file.';
         }
+      });
 
-        async function authenticate() {
-            try {
-                const authInstance = gapi.auth2.getAuthInstance();
-                await authInstance.signIn();
-                document.getElementById('authButton').style.display = 'none';
-                document.getElementById('uploadButton').disabled = false;
-            } catch (error) {
-                if (error.error === 'popup_closed_by_user') {
-                    console.warn('Authentication popup closed by user. Please try again.');
-                } else {
-                    console.error('Authentication failed:', error);
-                }
-            }
-        }
+      function gapiLoaded() {
+        gapi.load('client', initializeGapiClient);
+      }
 
-        async function uploadFile(file) {
-            try {
-                const boundary = '-------314159265358979323846';
-                const delimiter = `\r\n--${boundary}\r\n`;
-                const closeDelimiter = `\r\n--${boundary}--`;
-
-                const metadata = {
-                    name: file.name,
-                    mimeType: file.type,
-                };
-
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const fileData = e.target.result;
-
-                    const multipartRequestBody =
-                        delimiter +
-                        'Content-Type: application/json\r\n\r\n' +
-                        JSON.stringify(metadata) +
-                        delimiter +
-                        'Content-Type: ' +
-                        file.type +
-                        '\r\n\r\n' +
-                        fileData +
-                        closeDelimiter;
-
-                    // Ensure the user is authenticated
-                    const authInstance = gapi.auth2.getAuthInstance();
-                    const isSignedIn = authInstance.isSignedIn.get();
-                    if (!isSignedIn) {
-                        console.warn('User is not authenticated. Please sign in first.');
-                        return;
-                    }
-
-                    const response = await gapi.client.request({
-                        path: 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': `multipart/related; boundary=${boundary}`,
-                        },
-                        body: multipartRequestBody,
-                    });
-
-                    if (response.status === 401) {
-                        console.error('Unauthorized. Please check your credentials and authentication status.');
-                    } else {
-                        alert('File uploaded successfully: ' + response.result.id);
-                    }
-                };
-                reader.readAsBinaryString(file);
-            } catch (error) {
-                console.error('File upload failed:', error);
-            }
-        }
-
-        document.getElementById('uploadButton').addEventListener('click', async () => {
-            const fileInput = document.getElementById('fileInput');
-            if (!fileInput.files.length) {
-                alert('Please select a file first!');
-                return;
-            }
-            const file = fileInput.files[0];
-            try {
-                await uploadFile(file);
-            } catch (error) {
-                console.error('Error:', error);
-            }
+      async function initializeGapiClient() {
+        await gapi.client.init({
+          apiKey: API_KEY,
+          discoveryDocs: [DISCOVERY_DOC],
         });
+        gapiInited = true;
+      }
 
-        document.getElementById('authButton').addEventListener('click', authenticate);
+      function gisLoaded() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: async (resp) => {
+            if (resp.error !== undefined) {
+              throw resp;
+            }
+            // After successful authorization, proceed with file upload
+            await uploadFile();
+          }
+        });
+        gisInited = true;
+      }
 
-        // Load the Google API script
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.onload = loadAuthClient;
-        document.body.appendChild(script);
+      async function handleUploadClick() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+          document.getElementById('content').innerText = 'Please select a JPEG file first.';
+          return;
+        }
+
+        if (file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
+          document.getElementById('content').innerText = 'Please select only JPEG files.';
+          return;
+        }
+
+        document.getElementById('upload_button').setAttribute('disabled', 'true');
+        document.getElementById('content').innerText = 'Processing...';
+
+        try {
+          // Check if already authorized
+          if (gapi.client.getToken() === null) {
+            // Not authorized, trigger auth flow
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+          } else {
+            // Already authorized, proceed with upload
+            await uploadFile();
+          }
+        } catch (err) {
+          document.getElementById('content').innerText = 'Error: ' + err.message;
+          document.getElementById('upload_button').removeAttribute('disabled');
+        }
+      }
+
+      async function uploadFile() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        
+        try {
+          document.getElementById('content').innerText = 'Uploading...';
+          
+          // Create file metadata
+          const metadata = {
+            name: file.name,
+            mimeType: file.type,
+          };
+
+          // Create form data for multipart upload
+          const form = new FormData();
+          form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+          form.append('file', file);
+
+          // Upload file
+          const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + gapi.client.getToken().access_token,
+            },
+            body: form
+          });
+
+          const result = await response.json();
+          
+          if (response.ok) {
+            document.getElementById('content').innerText = `File uploaded successfully!\nFile ID: ${result.id}`;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('upload_button').setAttribute('disabled', 'true');
+            document.getElementById('signout_button').style.visibility = 'visible';
+            await listFiles();
+          } else {
+            throw new Error(result.error.message);
+          }
+        } catch (err) {
+          document.getElementById('content').innerText = 'Error uploading file: ' + err.message;
+          document.getElementById('upload_button').removeAttribute('disabled');
+        }
+      }
+
+      function handleSignoutClick() {
+        const token = gapi.client.getToken();
+        if (token !== null) {
+          google.accounts.oauth2.revoke(token.access_token);
+          gapi.client.setToken('');
+          document.getElementById('content').innerText = '';
+          document.getElementById('signout_button').style.visibility = 'hidden';
+          document.getElementById('upload_button').removeAttribute('disabled');
+          document.getElementById('fileInput').value = '';
+        }
+      }
+
+      async function listFiles() {
+        try {
+          const response = await gapi.client.drive.files.list({
+            'pageSize': 10,
+            'fields': 'files(id, name)',
+            'q': "mimeType contains 'image/jpeg'"
+          });
+          
+          const files = response.result.files;
+          if (!files || files.length == 0) {
+            document.getElementById('content').innerText += '\n\nNo JPEG files found in Drive.';
+            return;
+          }
+          
+          const output = files.reduce(
+            (str, file) => `${str}${file.name} (${file.id})\n`,
+            '\n\nJPEG Files in Drive:\n');
+          document.getElementById('content').innerText += output;
+        } catch (err) {
+          document.getElementById('content').innerText += '\n\nError listing files: ' + err.message;
+        }
+      }
     </script>
-</body>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+  </body>
 </html>
